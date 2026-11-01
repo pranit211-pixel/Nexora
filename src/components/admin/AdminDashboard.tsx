@@ -72,7 +72,7 @@ const INITIAL_MANAGED_USERS: ManagedUser[] = [
 ];
 
 export const AdminDashboard: React.FC = () => {
-  const { user, auditLogs, addAuditLog } = useAuth();
+  const { user, auditLogs, addAuditLog, provisionUser } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
 
   // Interactive user management - synchronized with registered_users
@@ -100,6 +100,8 @@ export const AdminDashboard: React.FC = () => {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserEnrollment, setNewUserEnrollment] = useState('');
   const [newUserRole, setNewUserRole] = useState<'student' | 'faculty'>('student');
   const [newUserDept, setNewUserDept] = useState('Computer Science');
 
@@ -159,28 +161,45 @@ export const AdminDashboard: React.FC = () => {
     addAuditLog('REJECT_REGISTRATION', 'UserProfile', id, `Administrator rejected access request for ${target?.fullName || id}`);
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName || !newUserEmail) return;
+    if (!newUserName || !newUserEmail || !newUserPassword) {
+      alert('Please fill all required fields including password.');
+      return;
+    }
 
-    const newUser: ManagedUser = {
-      id: 'u_' + Date.now(),
+    const res = await provisionUser({
       fullName: newUserName,
       email: newUserEmail,
       role: newUserRole,
+      password: newUserPassword,
       department: newUserDept,
-      enrollmentNo: newUserRole === 'student' ? `NX-2026-${Math.floor(1000 + Math.random() * 9000)}` : undefined,
-      status: 'Active',
-    };
+      enrollmentNo: newUserRole === 'student' ? newUserEnrollment || `NX-2026-${Math.floor(1000 + Math.random() * 9000)}` : undefined,
+    });
 
-    const updated = [newUser, ...managedUsers];
-    setManagedUsers(updated);
-    setStoredData('admin_managed_users', updated);
-    addAuditLog('ADMIN_ADD_USER', 'UserProfile', newUser.id, `Created ${newUser.role}: ${newUser.fullName}`);
+    if (res.success && res.user) {
+      const newUser: ManagedUser = {
+        id: res.user.id,
+        fullName: res.user.fullName,
+        email: res.user.email,
+        role: res.user.role as any,
+        department: res.user.department,
+        enrollmentNo: res.user.enrollmentNo,
+        status: 'Active',
+      };
+      const updated = [newUser, ...managedUsers];
+      setManagedUsers(updated);
+      setStoredData('admin_managed_users', updated);
 
-    setShowAddUserModal(false);
-    setNewUserName('');
-    setNewUserEmail('');
+      setShowAddUserModal(false);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserEnrollment('');
+      alert(`Account provisioned successfully for ${res.user.fullName}!\nRole: ${res.user.role}\nEmail: ${res.user.email}\nPassword: ${newUserPassword}`);
+    } else {
+      alert(res.message);
+    }
   };
 
   const handleCreateNotice = (e: React.FormEvent) => {
@@ -938,6 +957,35 @@ CASCADE;`);
                   </select>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Assign Account Password <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Set initial password for user to log in"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#36D9FF] font-mono"
+                />
+              </div>
+
+              {newUserRole === 'student' && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Enrollment Number (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. NX-2026-0042 (Auto-generated if empty)"
+                    value={newUserEnrollment}
+                    onChange={(e) => setNewUserEnrollment(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#36D9FF] font-mono"
+                  />
+                </div>
+              )}
 
               <button
                 type="submit"

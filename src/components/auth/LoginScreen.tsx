@@ -69,11 +69,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
     e.preventDefault();
     setError(null);
 
-    if (selectedRole === 'admin') {
-      setError('Administrator credentials must be provisioned by the Provost Office.');
-      return;
-    }
-
     if (!fullName || !email || !password) {
       setError('Please fill in all mandatory fields.');
       return;
@@ -85,14 +80,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
         fullName,
         email,
         phone,
-        role: selectedRole,
+        role: 'faculty',
         department,
-        enrollmentNo: selectedRole === 'student' ? enrollmentNo || `NX-2026-${Math.floor(1000 + Math.random() * 9000)}` : undefined,
-        semester: selectedRole === 'student' ? parseInt(semester, 10) : undefined,
       }, password);
 
       if (res.success) {
         setSuccessMsg(res.message);
+      } else {
+        setError(res.message);
       }
     } catch (err: any) {
       setError(err?.message || 'Registration failure.');
@@ -308,28 +303,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
             </form>
           )}
 
-          {/* MODE: REGISTER */}
+          {/* MODE: REGISTER - ONLY FACULTY CAN REGISTER */}
           {mode === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-              <div className="flex rounded-lg bg-slate-100 dark:bg-[#080B14] p-1 border border-slate-200 dark:border-slate-800 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('student')}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md ${
-                    selectedRole === 'student' ? 'bg-white dark:bg-[#101629] text-[#0284C7] dark:text-[#36D9FF] font-bold shadow-sm' : 'text-slate-500 dark:text-[#9BA6BC]'
-                  }`}
-                >
-                  Student Account
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('faculty')}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md ${
-                    selectedRole === 'faculty' ? 'bg-white dark:bg-[#101629] text-purple-600 dark:text-[#B46AFF] font-bold shadow-sm' : 'text-slate-500 dark:text-[#9BA6BC]'
-                  }`}
-                >
-                  Faculty Account
-                </button>
+              <div className="p-3 bg-purple-50 dark:bg-[#B46AFF]/10 border border-purple-200 dark:border-[#B46AFF]/30 rounded-xl text-xs space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-[#B46AFF]">
+                  <Briefcase className="w-4 h-4" />
+                  <span>Faculty Registration Portal</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <strong>Notice:</strong> Students cannot self-register. All student accounts are created directly by Course Faculty or the Institutional Administrator with an assigned password.
+                </p>
               </div>
 
               <div>
@@ -356,29 +340,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
-                  <input
-                    type="tel"
-                    placeholder="+1 (555) 000-0000"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
-                  />
-                </div>
-                {selectedRole === 'student' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Enrollment No.</label>
-                    <input
-                      type="text"
-                      placeholder="NX-2026-092"
-                      value={enrollmentNo}
-                      onChange={(e) => setEnrollmentNo(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white font-mono"
-                    />
-                  </div>
-                )}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
+                />
               </div>
 
               <div>

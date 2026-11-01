@@ -71,19 +71,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         fullName,
         email,
         phone,
-        role: selectedRole,
+        role: 'faculty',
         department,
-        enrollmentNo: selectedRole === 'student' ? enrollmentNo || `NX-2026-0${Math.floor(100 + Math.random() * 900)}` : undefined,
-        semester: selectedRole === 'student' ? parseInt(semester, 10) : undefined,
-        academicYear,
-      });
+      }, password);
 
       if (res.success) {
         setSuccessMsg(res.message);
         setTimeout(() => {
           onSuccess();
           onClose();
-        }, 1200);
+        }, 1500);
+      } else {
+        setError(res.message);
       }
     } catch (err: any) {
       setError(err?.message || 'Registration error');
@@ -163,31 +162,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             </div>
           )}
 
-          {/* Role selector for Registration or Login focus */}
-          <div className="flex rounded-lg bg-[#080B14] p-1 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setSelectedRole('student')}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-                selectedRole === 'student'
-                  ? 'bg-[#101629] text-[#36D9FF] shadow-sm font-semibold'
-                  : 'text-[#9BA6BC] hover:text-white'
-              }`}
-            >
-              Student
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRole('faculty')}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-                selectedRole === 'faculty'
-                  ? 'bg-[#101629] text-[#B46AFF] shadow-sm font-semibold'
-                  : 'text-[#9BA6BC] hover:text-white'
-              }`}
-            >
-              Faculty
-            </button>
-            {mode === 'login' && (
+          {/* Role selector for Login, or Notice for Registration */}
+          {mode === 'login' ? (
+            <div className="flex rounded-lg bg-[#080B14] p-1 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSelectedRole('student')}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  selectedRole === 'student'
+                    ? 'bg-[#101629] text-[#36D9FF] shadow-sm font-semibold'
+                    : 'text-[#9BA6BC] hover:text-white'
+                }`}
+              >
+                Student
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedRole('faculty')}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  selectedRole === 'faculty'
+                    ? 'bg-[#101629] text-[#B46AFF] shadow-sm font-semibold'
+                    : 'text-[#9BA6BC] hover:text-white'
+                }`}
+              >
+                Faculty
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedRole('admin')}
@@ -199,8 +198,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               >
                 Admin
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg text-xs space-y-1">
+              <span className="font-bold text-[#B46AFF] block">Faculty Account Registration</span>
+              <p className="text-[11px] text-slate-300">
+                Notice: Students cannot self-register. Student accounts must be created by Course Faculty or the Administrator.
+              </p>
+            </div>
+          )}
 
           {mode === 'login' && (
             <form onSubmit={handleLogin} className="space-y-3.5">

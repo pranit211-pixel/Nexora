@@ -68,7 +68,12 @@ export const StudentDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<StudentTab>('overview');
 
   // Local interactive states with persistence
-  const [attendance] = useState<AttendanceRecord[]>(() => getStoredData('attendance', INITIAL_ATTENDANCE));
+  const [attendance] = useState<AttendanceRecord[]>(() => {
+    if (user?.id) {
+      return getStoredData<AttendanceRecord[]>(`student_attendance_${user.id}`, []);
+    }
+    return getStoredData('attendance', INITIAL_ATTENDANCE);
+  });
   const [attendanceLogs] = useState<AttendanceLog[]>(() => getStoredData('attendance_logs', INITIAL_ATTENDANCE_LOGS));
   const [timetable] = useState<TimetableSlot[]>(() => getStoredData('timetable', INITIAL_TIMETABLE));
   const [assignments, setAssignments] = useState<Assignment[]>(() => getStoredData('assignments', INITIAL_ASSIGNMENTS));
@@ -104,7 +109,7 @@ export const StudentDashboard: React.FC = () => {
   const totalClassesSum = attendance.reduce((acc, curr) => acc + curr.totalClasses, 0);
   const attendedClassesSum = attendance.reduce((acc, curr) => acc + curr.attendedClasses, 0);
   const overallPercentage = totalClassesSum > 0 ? (attendedClassesSum / totalClassesSum) * 100 : 0;
-  const isAttendanceWarning = overallPercentage < 75;
+  const isAttendanceWarning = totalClassesSum > 0 && overallPercentage < 75;
 
   // Handle assignment file submission
   const handleAssignmentSubmit = (e: React.FormEvent) => {
@@ -185,15 +190,15 @@ export const StudentDashboard: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2 text-xs font-mono text-[#0284C7] dark:text-[#36D9FF] mb-1 font-semibold">
-                <span>Enrollment: {user?.enrollmentNo || 'NX-2023-AIDS-042'}</span>
+                <span>Enrollment: {user?.enrollmentNo || 'NX-2026-ENROLLED'}</span>
                 <span aria-hidden="true">·</span>
-                <span>Semester {user?.semester || 5}</span>
+                <span>Semester {user?.semester || 1}</span>
               </div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-                Welcome back, {user?.fullName || 'Alexandre Chen'}
+                Welcome back, {user?.fullName || 'Enrolled Scholar'}
               </h1>
               <p className="text-xs text-slate-600 dark:text-[#9BA6BC] mt-0.5">
-                Department of {user?.department || 'Artificial Intelligence & Data Science'}
+                Department of {user?.department || 'Autonomous Engineering'}
               </p>
             </div>
           </div>
@@ -202,18 +207,30 @@ export const StudentDashboard: React.FC = () => {
             {/* Attendance Mini Indicator */}
             <div
               className={`px-4 py-2 rounded-xl border text-xs flex items-center gap-2.5 ${
-                isAttendanceWarning
+                totalClassesSum === 0
+                  ? 'bg-slate-50 dark:bg-[#080B14] border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                  : isAttendanceWarning
                   ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300'
                   : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300'
               }`}
             >
-              {isAttendanceWarning ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+              {totalClassesSum === 0 ? (
+                <Clock className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
+              ) : isAttendanceWarning ? (
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              )}
               <div>
                 <span className="font-mono font-bold text-sm tabular-nums">
                   {overallPercentage.toFixed(1)}%
                 </span>
                 <span className="text-[10px] block opacity-80">
-                  {isAttendanceWarning ? 'Attendance Warning (<75%)' : 'Attendance Good'}
+                  {totalClassesSum === 0
+                    ? '0 / 0 Sessions Marked'
+                    : isAttendanceWarning
+                    ? 'Attendance Warning (<75%)'
+                    : 'Attendance Good'}
                 </span>
               </div>
             </div>
@@ -221,19 +238,20 @@ export const StudentDashboard: React.FC = () => {
             {/* Current CGPA Indicator */}
             <div className="px-4 py-2 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 text-xs">
               <span className="text-slate-500 dark:text-[#9BA6BC] block text-[10px]">Cumulative GPA</span>
-              <span className="text-[#0284C7] dark:text-[#36D9FF] font-mono font-bold text-sm tabular-nums">9.28 / 10.0</span>
+              <span className="text-[#0284C7] dark:text-[#36D9FF] font-mono font-bold text-sm tabular-nums">
+                {results.length > 0 && results[0]?.cgpa ? `${results[0].cgpa} / 10.0` : 'Pending'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Attendance Banner Warning if under 75% */}
-        {isAttendanceWarning && (
+        {/* Attendance Banner Warning if under 75% and classes have started */}
+        {isAttendanceWarning && totalClassesSum > 0 && (
           <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-start gap-3 text-xs">
             <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" />
             <div className="leading-relaxed">
               <strong className="font-semibold block text-slate-900 dark:text-white">Attendance Deficiency Alert</strong>
-              Your overall attendance is below the mandatory 75% threshold prescribed by the Academic Council.
-              Specific deficit: <strong>Autonomous Robotics &amp; SLAM (70.0%)</strong>. Please consult course faculty Dr. Samantha Reed to complete remedial studio sessions prior to examination eligibility cutoff.
+              Your overall attendance is currently {overallPercentage.toFixed(1)}% ({attendedClassesSum}/{totalClassesSum} lectures attended), which is below the mandatory 75% threshold prescribed by the Academic Council. Please consult your course faculty to complete remedial sessions prior to examination eligibility cutoff.
             </div>
           </div>
         )}
@@ -361,7 +379,7 @@ export const StudentDashboard: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Award className="w-4 h-4 text-purple-600 dark:text-[#B46AFF]" />
-                    <span>Semester 4 Performance</span>
+                    <span>Academic Performance</span>
                   </h3>
                   <button
                     onClick={() => setActiveTab('results')}
@@ -371,30 +389,44 @@ export const StudentDashboard: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 mb-4 flex items-center justify-between transition-colors">
-                  <div>
-                    <span className="text-xs text-slate-500 dark:text-[#9BA6BC] block">Semester SGPA</span>
-                    <span className="text-3xl font-extrabold font-mono text-[#0284C7] dark:text-[#36D9FF] tabular-nums">9.42</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-500 dark:text-[#9BA6BC] block">Standing</span>
-                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                      First Class Distinction
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  {results[0]?.results.slice(0, 3).map((res) => (
-                    <div
-                      key={res.id}
-                      className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800/60 last:border-0"
-                    >
-                      <span className="text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{res.subjectName}</span>
-                      <span className="font-mono font-bold text-[#0284C7] dark:text-[#36D9FF]">Grade {res.grade} ({res.totalMarks}/100)</span>
+                {results.length > 0 && results[0] ? (
+                  <>
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 mb-4 flex items-center justify-between transition-colors">
+                      <div>
+                        <span className="text-xs text-slate-500 dark:text-[#9BA6BC] block">Semester {results[0].semester} SGPA</span>
+                        <span className="text-3xl font-extrabold font-mono text-[#0284C7] dark:text-[#36D9FF] tabular-nums">
+                          {results[0].sgpa}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-slate-500 dark:text-[#9BA6BC] block">Standing</span>
+                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          Verified
+                        </span>
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="space-y-2 text-xs">
+                      {results[0].results.slice(0, 3).map((res) => (
+                        <div
+                          key={res.id}
+                          className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800/60 last:border-0"
+                        >
+                          <span className="text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{res.subjectName}</span>
+                          <span className="font-mono font-bold text-[#0284C7] dark:text-[#36D9FF]">Grade {res.grade} ({res.totalMarks}/100)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-6 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-[#9BA6BC] space-y-2">
+                    <Award className="w-8 h-8 mx-auto opacity-30 text-[#0284C7] dark:text-[#36D9FF]" />
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">No Grade Sheets Published Yet</p>
+                    <p className="text-[11px] leading-relaxed">
+                      Official examination scores and SGPA records will be posted here once evaluation is completed by the Academic Council.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -421,29 +453,45 @@ export const StudentDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
-                    {attendance.map((rec) => (
-                      <tr key={rec.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">{rec.subjectName}</td>
-                        <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">{rec.attendedClasses}</td>
-                        <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">{rec.totalClasses}</td>
-                        <td className="py-3.5 px-4 text-right font-mono font-bold tabular-nums">
-                          <span className={rec.percentage < 75 ? 'text-rose-600 dark:text-rose-400' : 'text-[#0284C7] dark:text-[#36D9FF]'}>
-                            {rec.percentage.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                              rec.percentage < 75
-                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-300 border border-rose-500/30'
-                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                            }`}
-                          >
-                            {rec.percentage < 75 ? 'Warning (<75%)' : 'Eligible'}
-                          </span>
+                    {attendance.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-10 text-center">
+                          <div className="flex flex-col items-center justify-center gap-2 text-slate-500 dark:text-[#9BA6BC]">
+                            <Clock className="w-7 h-7 text-slate-400 dark:text-slate-600 opacity-60" />
+                            <p className="font-semibold text-slate-700 dark:text-slate-300 text-sm">
+                              No Attendance Sessions Logged Yet
+                            </p>
+                            <p className="text-xs max-w-sm">
+                              Your attendance starts clean at 0.0%. Once your assigned faculty takes roll call during classroom sessions, your subject-wise metrics will reflect automatically.
+                            </p>
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      attendance.map((rec) => (
+                        <tr key={rec.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">{rec.subjectName}</td>
+                          <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">{rec.attendedClasses}</td>
+                          <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">{rec.totalClasses}</td>
+                          <td className="py-3.5 px-4 text-right font-mono font-bold tabular-nums">
+                            <span className={rec.percentage < 75 ? 'text-rose-600 dark:text-rose-400' : 'text-[#0284C7] dark:text-[#36D9FF]'}>
+                              {rec.percentage.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                rec.percentage < 75
+                                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-300 border border-rose-500/30'
+                                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
+                              }`}
+                            >
+                              {rec.percentage < 75 ? 'Warning (<75%)' : 'Eligible'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -453,28 +501,34 @@ export const StudentDashboard: React.FC = () => {
             <div className="p-6 rounded-2xl bg-white dark:bg-[#101629] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none transition-colors">
               <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Recent Session Attendance Logs</h3>
               <div className="space-y-2">
-                {attendanceLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs transition-colors"
-                  >
-                    <div>
-                      <span className="font-semibold text-slate-900 dark:text-white block">{log.subjectName}</span>
-                      <span className="text-slate-500 dark:text-[#9BA6BC] text-[11px] font-mono">
-                        {log.date} · {log.period} · Instructor: {log.facultyName}
+                {attendanceLogs.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-[#9BA6BC] py-6 text-center">
+                    No classroom roll call records logged yet for this academic period.
+                  </p>
+                ) : (
+                  attendanceLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs transition-colors"
+                    >
+                      <div>
+                        <span className="font-semibold text-slate-900 dark:text-white block">{log.subjectName}</span>
+                        <span className="text-slate-500 dark:text-[#9BA6BC] text-[11px] font-mono">
+                          {log.date} · {log.period} · Instructor: {log.facultyName}
+                        </span>
+                      </div>
+                      <span
+                        className={`px-2.5 py-1 rounded text-xs font-semibold ${
+                          log.status === 'Present'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                        }`}
+                      >
+                        {log.status}
                       </span>
                     </div>
-                    <span
-                      className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                        log.status === 'Present'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                      }`}
-                    >
-                      {log.status}
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -697,57 +751,67 @@ export const StudentDashboard: React.FC = () => {
         {/* TAB 7: RESULTS */}
         {activeTab === 'results' && (
           <div className="space-y-6">
-            {results.map((semResult) => (
-              <div key={semResult.semester} className="p-6 rounded-2xl bg-white dark:bg-[#101629] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none transition-colors">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Semester {semResult.semester} Official Grade Sheet</h3>
-                    <p className="text-xs text-slate-500 dark:text-[#9BA6BC]">Autonomous Evaluation · Academic Year 2025-2026</p>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs font-mono">
-                    <div className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800">
-                      SGPA: <strong className="text-[#0284C7] dark:text-[#36D9FF] text-sm tabular-nums">{semResult.sgpa}</strong>
-                    </div>
-                    <div className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800">
-                      CGPA: <strong className="text-purple-600 dark:text-[#B46AFF] text-sm tabular-nums">{semResult.cgpa}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-100 dark:bg-[#080B14] text-slate-700 dark:text-[#9BA6BC] border-b border-slate-200 dark:border-slate-800">
-                      <tr>
-                        <th className="py-2.5 px-3">Subject Code</th>
-                        <th className="py-2.5 px-3">Subject Name</th>
-                        <th className="py-2.5 px-3 text-right">Internal</th>
-                        <th className="py-2.5 px-3 text-right">External</th>
-                        <th className="py-2.5 px-3 text-right">Total</th>
-                        <th className="py-2.5 px-3 text-center">Grade</th>
-                        <th className="py-2.5 px-3 text-right">Points</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono">
-                      {semResult.results.map((res) => (
-                        <tr key={res.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="py-2.5 px-3 font-semibold text-[#0284C7] dark:text-[#36D9FF]">{res.subjectCode}</td>
-                          <td className="py-2.5 px-3 font-sans text-slate-900 dark:text-white font-medium">{res.subjectName}</td>
-                          <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-300">{res.internalMarks}</td>
-                          <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-300">{res.externalMarks}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white">{res.totalMarks}</td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded bg-sky-500/10 dark:bg-[#36D9FF]/10 text-[#0284C7] dark:text-[#36D9FF] font-bold border border-sky-500/20 dark:border-[#36D9FF]/20">
-                              {res.grade}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-300">{res.gradePoints}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            {results.length === 0 ? (
+              <div className="p-10 rounded-2xl bg-white dark:bg-[#101629] border border-slate-200 dark:border-slate-800 text-center space-y-3 shadow-sm dark:shadow-none">
+                <Award className="w-10 h-10 mx-auto text-slate-400 opacity-40 dark:text-slate-500" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Official Grade Sheets Pending</h3>
+                <p className="text-xs text-slate-500 dark:text-[#9BA6BC] max-w-md mx-auto">
+                  Examination evaluation records and SGPA/CGPA summaries will be published following institutional review by the Controller of Examinations.
+                </p>
               </div>
-            ))}
+            ) : (
+              results.map((semResult) => (
+                <div key={semResult.semester} className="p-6 rounded-2xl bg-white dark:bg-[#101629] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">Semester {semResult.semester} Official Grade Sheet</h3>
+                      <p className="text-xs text-slate-500 dark:text-[#9BA6BC]">Autonomous Evaluation · Academic Year 2025-2026</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-mono">
+                      <div className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800">
+                        SGPA: <strong className="text-[#0284C7] dark:text-[#36D9FF] text-sm tabular-nums">{semResult.sgpa}</strong>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800">
+                        CGPA: <strong className="text-purple-600 dark:text-[#B46AFF] text-sm tabular-nums">{semResult.cgpa}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-100 dark:bg-[#080B14] text-slate-700 dark:text-[#9BA6BC] border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                          <th className="py-2.5 px-3">Subject Code</th>
+                          <th className="py-2.5 px-3">Subject Name</th>
+                          <th className="py-2.5 px-3 text-right">Internal</th>
+                          <th className="py-2.5 px-3 text-right">External</th>
+                          <th className="py-2.5 px-3 text-right">Total</th>
+                          <th className="py-2.5 px-3 text-center">Grade</th>
+                          <th className="py-2.5 px-3 text-right">Points</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono">
+                        {semResult.results.map((res) => (
+                          <tr key={res.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="py-2.5 px-3 font-semibold text-[#0284C7] dark:text-[#36D9FF]">{res.subjectCode}</td>
+                            <td className="py-2.5 px-3 font-sans text-slate-900 dark:text-white font-medium">{res.subjectName}</td>
+                            <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-300">{res.internalMarks}</td>
+                            <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-300">{res.externalMarks}</td>
+                            <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white">{res.totalMarks}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span className="px-2 py-0.5 rounded bg-sky-500/10 dark:bg-[#36D9FF]/10 text-[#0284C7] dark:text-[#36D9FF] font-bold border border-sky-500/20 dark:border-[#36D9FF]/20">
+                                {res.grade}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-300">{res.gradePoints}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -760,7 +824,14 @@ export const StudentDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              {fees.map((f) => (
+              {fees.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 dark:text-[#9BA6BC] bg-slate-50 dark:bg-[#080B14] rounded-xl border border-slate-200 dark:border-slate-800">
+                  <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-30 text-[#0284C7] dark:text-[#36D9FF]" />
+                  <p className="font-semibold text-slate-700 dark:text-slate-300">No outstanding fee dues or receipts found</p>
+                  <p className="text-[11px] mt-1">Institutional accounts are reconciled each semester cycle.</p>
+                </div>
+              ) : (
+                fees.map((f) => (
                 <div
                   key={f.id}
                   className="p-5 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors"
@@ -817,10 +888,11 @@ export const StudentDashboard: React.FC = () => {
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
+        </div>
+      )}
 
         {/* TAB 9: COMPLAINTS */}
         {activeTab === 'complaints' && (

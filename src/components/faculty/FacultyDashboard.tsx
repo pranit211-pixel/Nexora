@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   CheckCircle2,
@@ -6,6 +6,7 @@ import {
   FileText,
   Upload,
   Plus,
+  UserPlus,
   Award,
   BookOpen,
   Clock,
@@ -22,7 +23,10 @@ import {
   AssignmentSubmission,
   StudyMaterial,
   Notice,
-  TimetableSlot
+  TimetableSlot,
+  AttendanceRecord,
+  AttendanceLog,
+  UserProfile
 } from '../../types';
 import {
   INITIAL_ASSIGNMENTS,
@@ -49,28 +53,42 @@ interface StudentRosterItem {
   present: boolean;
 }
 
-const INITIAL_ROSTER: StudentRosterItem[] = [
-  { id: 'st_1', name: 'Alexandre Chen', enrollment: 'NX-2023-AIDS-042', present: true },
-  { id: 'st_2', name: 'Maya Patel', enrollment: 'NX-2023-AIDS-019', present: true },
-  { id: 'st_3', name: 'Julian Vance', enrollment: 'NX-2023-AIDS-088', present: true },
-  { id: 'st_4', name: 'Sophia Tanaka', enrollment: 'NX-2023-AIDS-012', present: false },
-  { id: 'st_5', name: 'Liam O’Connor', enrollment: 'NX-2023-AIDS-055', present: true },
-  { id: 'st_6', name: 'Amara Okafor', enrollment: 'NX-2023-AIDS-071', present: true },
-  { id: 'st_7', name: 'Elena Gomez', enrollment: 'NX-2023-AIDS-033', present: false },
-  { id: 'st_8', name: 'Devon Wright', enrollment: 'NX-2023-AIDS-064', present: true },
-];
-
 export const FacultyDashboard: React.FC = () => {
-  const { user, addAuditLog } = useAuth();
+  const { user, addAuditLog, createStudentAccount } = useAuth();
   const [activeTab, setActiveTab] = useState<FacultyTab>('overview');
 
-  // Interactive roster for attendance marking
-  const [roster, setRoster] = useState<StudentRosterItem[]>(() =>
-    getStoredData('faculty_roster', INITIAL_ROSTER)
-  );
-  const [sessionTopic, setSessionTopic] = useState('Multi-Head Attention Layers & Positional Encodings');
-  const [sessionDate, setSessionDate] = useState('2026-10-31');
+  // Interactive roster for attendance marking (dynamically loads registered students)
+  const [roster, setRoster] = useState<StudentRosterItem[]>(() => {
+    const saved = getStoredData<StudentRosterItem[]>('faculty_roster', []);
+    const allUsers = getStoredData<UserProfile[]>('registered_users', []);
+    const students = allUsers.filter((u) => u.role === 'student' && u.isApproved);
+    const map = new Map<string, StudentRosterItem>();
+    saved.forEach((r) => map.set(r.id, r));
+    students.forEach((stu) => {
+      if (!map.has(stu.id)) {
+        map.set(stu.id, {
+          id: stu.id,
+          name: stu.fullName,
+          enrollment: stu.enrollmentNo || `NX-2026-${stu.id.slice(-4)}`,
+          present: false, // Default false - no default attendance!
+        });
+      }
+    });
+    return Array.from(map.values());
+  });
+
+  const [sessionTopic, setSessionTopic] = useState('Deep Neural Networks & Vision Lab');
+  const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().substring(0, 10));
   const [attendanceSaved, setAttendanceSaved] = useState(false);
+
+  // Enroll Student Modal State
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [newStuName, setNewStuName] = useState('');
+  const [newStuEmail, setNewStuEmail] = useState('');
+  const [newStuEnrollment, setNewStuEnrollment] = useState('');
+  const [newStuSemester, setNewStuSemester] = useState('5');
+  const [newStuPassword, setNewStuPassword] = useState('');
+  const [stuSubmitting, setStuSubmitting] = useState(false);
 
   // Assignments & Submissions
   const [assignments, setAssignments] = useState<Assignment[]>(() =>
@@ -119,17 +137,119 @@ export const FacultyDashboard: React.FC = () => {
     setRoster((prev) => prev.map((s) => ({ ...s, present: status })));
   };
 
+  const handleEnrollStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStuName || !newStuEmail || !newStuPassword) {
+      alert('Please fill student name, email, and designated password.');
+      return;
+    }
+
+    setStuSubmitting(true);
+    try {
+      const generatedEnrollment = newStuEnrollment.trim() || `NX-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const res = await createStudentAccount({
+        fullName: newStuName.trim(),
+        email: newStuEmail.trim(),
+        password: newStuPassword.trim(),
+        enrollmentNo: generatedEnrollment,
+        department: user?.department || 'Artificial Intelligence & Data Science',
+        semester: parseInt(newStuSemester, 10) || 5,
+      });
+
+      if (res.success && res.user) {
+        const newRosterItem: StudentRosterItem = {
+          id: res.user.id,
+          name: res.user.fullName,
+          enrollment: res.user.enrollmentNo || generatedEnrollment,
+          present: false, // Zero attendance initially!
+        };
+        const updatedRoster = [...roster, newRosterItem];
+        setRoster(updatedRoster);
+        setStoredData('faculty_roster', updatedRoster);
+
+        setShowAddStudentModal(false);
+        setNewStuName('');
+        setNewStuEmail('');
+        setNewStuEnrollment('');
+        setNewStuPassword('');
+        alert(
+          `Student Enrolled Successfully!\n\nName: ${res.user.fullName}\nEmail: ${res.user.email}\nPassword: ${newStuPassword.trim()}\nEnrollment: ${generatedEnrollment}\n\nThe student can now directly log in to the portal with this password. Initial attendance is 0% until marked.`
+        );
+      } else {
+        alert(res.message);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to enroll student.');
+    } finally {
+      setStuSubmitting(false);
+    }
+  };
+
   const handleSaveAttendance = () => {
     setStoredData('faculty_roster', roster);
     const presentCount = roster.filter((s) => s.present).length;
+
+    // Log institutional audit
     addAuditLog(
       'MARK_ATTENDANCE',
       'AttendanceSession',
       'AIDS-501',
-      `Marked attendance for "${sessionTopic}" on ${sessionDate}: ${presentCount}/${roster.length} present`
+      `Faculty ${user?.fullName || 'Instructor'} marked attendance for "${sessionTopic}" on ${sessionDate}: ${presentCount}/${roster.length} scholars present`
     );
+
+    // Save attendance log
+    const existingLogs = getStoredData<AttendanceLog[]>('attendance_logs', []);
+    const newLog: AttendanceLog = {
+      id: 'log_' + Date.now(),
+      date: sessionDate,
+      subjectName: sessionTopic,
+      facultyName: user?.fullName || 'Dr. Marcus Sterling',
+      status: presentCount > 0 ? 'Present' : 'Absent',
+      period: '09:00 - 10:30',
+    };
+    setStoredData('attendance_logs', [newLog, ...existingLogs]);
+
+    // Update real attendance for each enrolled student
+    roster.forEach((student) => {
+      const studentAttKey = 'student_attendance_' + student.id;
+      const currentRecords = getStoredData<AttendanceRecord[]>(studentAttKey, []);
+      const existingSubIndex = currentRecords.findIndex(
+        (r) => r.subjectName.toLowerCase() === sessionTopic.toLowerCase()
+      );
+
+      let updatedRecords: AttendanceRecord[];
+      if (existingSubIndex >= 0) {
+        const existing = currentRecords[existingSubIndex];
+        const newTotal = existing.totalClasses + 1;
+        const newAttended = existing.attendedClasses + (student.present ? 1 : 0);
+        const newPct = Math.round((newAttended / newTotal) * 1000) / 10;
+        updatedRecords = [...currentRecords];
+        updatedRecords[existingSubIndex] = {
+          ...existing,
+          totalClasses: newTotal,
+          attendedClasses: newAttended,
+          percentage: newPct,
+          lastDate: sessionDate,
+          status: newPct >= 75 ? 'Safe' : 'Warning',
+        };
+      } else {
+        const isPres = student.present;
+        const newRec: AttendanceRecord = {
+          id: 'att_' + Date.now() + '_' + student.id.slice(-4),
+          subjectName: sessionTopic,
+          totalClasses: 1,
+          attendedClasses: isPres ? 1 : 0,
+          percentage: isPres ? 100.0 : 0.0,
+          lastDate: sessionDate,
+          status: isPres ? 'Safe' : 'Warning',
+        };
+        updatedRecords = [...currentRecords, newRec];
+      }
+      setStoredData(studentAttKey, updatedRecords);
+    });
+
     setAttendanceSaved(true);
-    setTimeout(() => setAttendanceSaved(false), 2500);
+    setTimeout(() => setAttendanceSaved(false), 3000);
   };
 
   const handleCreateAssignment = (e: React.FormEvent) => {
@@ -250,7 +370,7 @@ export const FacultyDashboard: React.FC = () => {
             </div>
             <div className="px-4 py-2 rounded-xl bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 text-xs">
               <span className="text-slate-500 dark:text-[#9BA6BC] block text-[10px] font-medium">Total Scholars</span>
-              <span className="text-slate-900 dark:text-white font-mono font-bold text-sm">68 Active</span>
+              <span className="text-slate-900 dark:text-white font-mono font-bold text-sm">{roster.length} Enrolled</span>
             </div>
           </div>
         </div>
@@ -302,9 +422,9 @@ export const FacultyDashboard: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-[#9BA6BC] mt-2">Transformer Attention assignments submitted</p>
               </div>
               <div className="p-5 rounded-2xl bg-white dark:bg-[#101629] border border-slate-200 dark:border-slate-800 shadow-sm">
-                <span className="text-xs text-slate-500 dark:text-[#9BA6BC] block mb-1 font-medium">Class Attendance Average</span>
-                <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">87.5%</span>
-                <p className="text-xs text-slate-500 dark:text-[#9BA6BC] mt-2">Deep Neural Networks &amp; Vision</p>
+                <span className="text-xs text-slate-500 dark:text-[#9BA6BC] block mb-1 font-medium">Enrolled Scholars</span>
+                <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">{roster.length} Students</span>
+                <p className="text-xs text-slate-500 dark:text-[#9BA6BC] mt-2">Section 5-A Academic Roster</p>
               </div>
             </div>
 
@@ -315,6 +435,13 @@ export const FacultyDashboard: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-[#9BA6BC]">Execute classroom operations with immediate database synchronization</p>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowAddStudentModal(true)}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] dark:bg-[#B46AFF] dark:text-[#080B14] dark:hover:bg-[#B46AFF]/90 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Enroll Student</span>
+                </button>
                 <button
                   onClick={() => setActiveTab('attendance')}
                   className="px-4 py-2 text-xs font-semibold text-white dark:text-[#080B14] bg-[#0284C7] dark:bg-[#36D9FF] hover:bg-[#0369A1] dark:hover:bg-[#36D9FF]/90 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
@@ -345,7 +472,14 @@ export const FacultyDashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setShowAddStudentModal(true)}
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] dark:bg-[#B46AFF] dark:text-[#080B14] rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Enroll Student</span>
+                </button>
                 <button
                   onClick={() => markAll(true)}
                   className="px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
@@ -391,45 +525,62 @@ export const FacultyDashboard: React.FC = () => {
             )}
 
             {/* Roster Table */}
-            <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-100 dark:bg-[#080B14] text-slate-700 dark:text-[#9BA6BC] border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="py-2.5 px-3">Student Name</th>
-                    <th className="py-2.5 px-3">Enrollment Number</th>
-                    <th className="py-2.5 px-3 text-center">Status</th>
-                    <th className="py-2.5 px-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono bg-white dark:bg-transparent">
-                  {roster.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                      <td className="py-3 px-3 font-sans font-semibold text-slate-900 dark:text-white">{s.name}</td>
-                      <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{s.enrollment}</td>
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
-                            s.present
-                              ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
-                              : 'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
-                          }`}
-                        >
-                          {s.present ? 'Present' : 'Absent'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => toggleAttendance(s.id)}
-                          className="px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded transition-colors"
-                        >
-                          Toggle {s.present ? 'Absent' : 'Present'}
-                        </button>
-                      </td>
+            {roster.length === 0 ? (
+              <div className="py-12 px-4 text-center rounded-xl bg-slate-50 dark:bg-[#080B14] border border-dashed border-slate-300 dark:border-slate-800 space-y-3">
+                <Users className="w-10 h-10 mx-auto opacity-30 text-[#0284C7] dark:text-[#36D9FF]" />
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">No Scholars Enrolled In This Section</h4>
+                <p className="text-xs text-slate-500 dark:text-[#9BA6BC] max-w-md mx-auto">
+                  Only faculty and administrators can enroll new students with an assigned password. Click the button below to enroll your first student.
+                </p>
+                <button
+                  onClick={() => setShowAddStudentModal(true)}
+                  className="px-4 py-2 text-xs font-bold text-white bg-[#7C3AED] hover:bg-[#6D28D9] dark:bg-[#B46AFF] dark:text-[#080B14] rounded-lg inline-flex items-center gap-1.5 shadow-sm"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Enroll Student with Password</span>
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-100 dark:bg-[#080B14] text-slate-700 dark:text-[#9BA6BC] border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Student Name</th>
+                      <th className="py-2.5 px-3">Enrollment Number</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono bg-white dark:bg-transparent">
+                    {roster.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                        <td className="py-3 px-3 font-sans font-semibold text-slate-900 dark:text-white">{s.name}</td>
+                        <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{s.enrollment}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span
+                            className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
+                              s.present
+                                ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                                : 'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
+                            }`}
+                          >
+                            {s.present ? 'Present' : 'Absent'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            onClick={() => toggleAttendance(s.id)}
+                            className="px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded transition-colors"
+                          >
+                            Toggle {s.present ? 'Absent' : 'Present'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <span className="text-xs text-slate-600 dark:text-[#9BA6BC]">
@@ -437,8 +588,9 @@ export const FacultyDashboard: React.FC = () => {
                 {roster.length} scholars
               </span>
               <button
+                disabled={roster.length === 0}
                 onClick={handleSaveAttendance}
-                className="px-5 py-2.5 text-xs font-bold text-white dark:text-[#080B14] bg-[#0284C7] dark:bg-[#36D9FF] hover:bg-[#0369A1] dark:hover:bg-[#36D9FF]/90 rounded-lg transition-all shadow-sm dark:shadow-[0_0_15px_-3px_rgba(54,217,255,0.4)]"
+                className="px-5 py-2.5 text-xs font-bold text-white dark:text-[#080B14] bg-[#0284C7] dark:bg-[#36D9FF] hover:bg-[#0369A1] dark:hover:bg-[#36D9FF]/90 rounded-lg transition-all shadow-sm dark:shadow-[0_0_15px_-3px_rgba(54,217,255,0.4)] disabled:opacity-50"
               >
                 Submit &amp; Audit Log Session
               </button>
@@ -836,6 +988,115 @@ export const FacultyDashboard: React.FC = () => {
                 className="w-full py-2.5 text-xs font-bold text-white dark:text-[#080B14] bg-[#0284C7] dark:bg-[#36D9FF] hover:bg-[#0369A1] dark:hover:bg-[#36D9FF]/90 rounded-lg transition-all shadow-sm dark:shadow-[0_0_15px_-3px_rgba(54,217,255,0.4)]"
               >
                 Upload &amp; Link to Student Portals
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Enroll Student Modal */}
+      {showAddStudentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-[#101629] border border-slate-200 dark:border-[#B46AFF]/30 rounded-2xl shadow-2xl p-6 transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-[#B46AFF]/20 flex items-center justify-center text-[#7C3AED] dark:text-[#B46AFF]">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Enroll New Student</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-[#9BA6BC]">Assign portal access credentials</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddStudentModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:text-[#9BA6BC] dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEnrollStudent} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Student Full Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Jordan Miller"
+                  value={newStuName}
+                  onChange={(e) => setNewStuName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#B46AFF]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Institutional Email <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="jordan.miller@nexora.edu"
+                  value={newStuEmail}
+                  onChange={(e) => setNewStuEmail(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#B46AFF]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Enrollment No.
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. NX-2026-0091"
+                    value={newStuEnrollment}
+                    onChange={(e) => setNewStuEnrollment(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Semester
+                  </label>
+                  <select
+                    value={newStuSemester}
+                    onChange={(e) => setNewStuSemester(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                      <option key={s} value={s}>Semester {s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Designated Login Password <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Set initial password for student to log in"
+                  value={newStuPassword}
+                  onChange={(e) => setNewStuPassword(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#B46AFF] font-mono"
+                />
+                <p className="text-[10px] text-slate-500 dark:text-[#9BA6BC] mt-1">
+                  Student uses their email and this password to log in. Their initial attendance starts at 0% until marked.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={stuSubmitting}
+                className="w-full py-2.5 text-xs font-bold text-white bg-[#7C3AED] hover:bg-[#6D28D9] dark:bg-[#B46AFF] dark:text-[#080B14] dark:hover:bg-[#B46AFF]/90 rounded-lg transition-all shadow-sm dark:shadow-[0_0_15px_-3px_rgba(180,106,255,0.4)] disabled:opacity-50"
+              >
+                {stuSubmitting ? 'Enrolling Scholar...' : 'Enroll Student with Credentials'}
               </button>
             </form>
           </div>

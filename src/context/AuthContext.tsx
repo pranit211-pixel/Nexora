@@ -20,6 +20,25 @@ interface AuthContextType {
   approveUser: (userId: string) => void;
   rejectUser: (userId: string) => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
+  createStudentAccount: (studentData: {
+    fullName: string;
+    email: string;
+    password: string;
+    department?: string;
+    enrollmentNo?: string;
+    semester?: number;
+    phone?: string;
+  }) => Promise<{ success: boolean; message: string; user?: UserProfile }>;
+  provisionUser: (userData: {
+    fullName: string;
+    email: string;
+    role: UserRole;
+    password: string;
+    department?: string;
+    enrollmentNo?: string;
+    semester?: number;
+    phone?: string;
+  }) => Promise<{ success: boolean; message: string; user?: UserProfile }>;
   auditLogs: AuditLog[];
   addAuditLog: (action: string, entityType: string, entityId?: string, details?: string) => void;
 }
@@ -187,8 +206,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Valid institutional email address is required.' };
     }
 
-    // Prohibit registering admin role directly
-    const targetRole: UserRole = userData.role === 'admin' ? 'student' : (userData.role || 'student');
+    // STRICT RULE: Students cannot self-register; only Faculty can apply for account approval
+    if (userData.role === 'student') {
+      return {
+        success: false,
+        message: 'Students cannot self-register. Student accounts must be enrolled directly by Faculty or the Institutional Administrator with an assigned password.',
+      };
+    }
+
+    // Prohibit registering admin role directly; default to faculty
+    const targetRole: UserRole = userData.role === 'admin' ? 'faculty' : (userData.role || 'faculty');
 
     // Check if account already exists
     const currentRegistry = getStoredData<UserProfile[]>('registered_users', registeredUsers);
@@ -211,12 +238,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newUser: UserProfile = {
       id: 'usr_' + Date.now(),
       email: cleanEmail,
-      fullName: userData.fullName || 'New Applicant',
+      fullName: userData.fullName || 'Faculty Applicant',
       role: targetRole,
-      department: userData.department || 'General Studies',
-      enrollmentNo: userData.enrollmentNo || (targetRole === 'student' ? `NX-2026-${Math.floor(1000 + Math.random() * 9000)}` : undefined),
+      department: userData.department || 'Artificial Intelligence & Data Science',
       phone: userData.phone || '',
-      semester: userData.semester || 1,
       academicYear: '2026-2027',
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
       isApproved: false, // Must be approved by admin ajayshewale211@gmail.com
@@ -249,11 +274,102 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       `New ${newUser.role} registration request from ${newUser.fullName} (${cleanEmail}) queued for Administrator (ajayshewale211@gmail.com) approval.`
     );
 
-    // Do NOT call setUser(newUser) - user remains unauthenticated until approved!
     return {
       success: true,
-      message: `Registration request submitted successfully! Your application has been sent to Administrator Ajay Shewale (ajayshewale211@gmail.com). You will be able to log in as soon as the administrator approves your request.`,
+      message: `Registration request for ${newUser.fullName} submitted. Administrator Ajay Shewale (ajayshewale211@gmail.com) must approve your account before you can log in.`,
     };
+  };
+
+  const provisionUser = async (userData: {
+    fullName: string;
+    email: string;
+    role: UserRole;
+    password: string;
+    department?: string;
+    enrollmentNo?: string;
+    semester?: number;
+    phone?: string;
+  }): Promise<{ success: boolean; message: string; user?: UserProfile }> => {
+    const cleanEmail = userData.email.trim().toLowerCase();
+    const cleanPassword = userData.password.trim();
+
+    if (!cleanEmail || !cleanPassword || !userData.fullName.trim()) {
+      return { success: false, message: 'Full name, email, and password are required.' };
+    }
+
+    const currentRegistry = getStoredData<UserProfile[]>('registered_users', registeredUsers);
+    if (currentRegistry.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, message: `An account with email "${cleanEmail}" already exists.` };
+    }
+
+    const newUser: UserProfile = {
+      id: 'usr_' + Date.now(),
+      email: cleanEmail,
+      fullName: userData.fullName.trim(),
+      role: userData.role,
+      department: userData.department || 'Artificial Intelligence & Data Science',
+      enrollmentNo: userData.enrollmentNo || (userData.role === 'student' ? `NX-2026-${Math.floor(1000 + Math.random() * 9000)}` : undefined),
+      phone: userData.phone || '',
+      semester: userData.semester || 1,
+      academicYear: '2026-2027',
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
+      isApproved: true, // Authorized directly by Admin or Faculty
+      status: 'Active',
+      password: cleanPassword,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...currentRegistry, newUser];
+    setRegisteredUsers(updated);
+    setStoredData('registered_users', updated);
+    setStoredData('admin_managed_users', updated);
+
+    // If student, initialize clean attendance (zero default attendance)
+    if (newUser.role === 'student') {
+      setStoredData('student_attendance_' + newUser.id, []);
+      // Update faculty roster so faculty can see and mark attendance for them immediately
+      const currentRoster = getStoredData<any[]>('faculty_roster', []);
+      if (!currentRoster.some((r) => r.id === newUser.id || r.name.toLowerCase() === newUser.fullName.toLowerCase())) {
+        const updatedRoster = [
+          ...currentRoster,
+          {
+            id: newUser.id,
+            name: newUser.fullName,
+            enrollment: newUser.enrollmentNo || `NX-${Date.now().toString().slice(-4)}`,
+            present: false,
+          },
+        ];
+        setStoredData('faculty_roster', updatedRoster);
+      }
+    }
+
+    addAuditLog(
+      'PROVISION_ACCOUNT',
+      'UserProfile',
+      newUser.id,
+      `${user?.role || 'Admin'} (${user?.email || 'admin'}) created ${newUser.role} account: ${newUser.fullName} (${newUser.email}) with assigned password.`
+    );
+
+    return {
+      success: true,
+      message: `${newUser.role.toUpperCase()} account created for ${newUser.fullName}. Login Email: ${newUser.email}`,
+      user: newUser,
+    };
+  };
+
+  const createStudentAccount = async (studentData: {
+    fullName: string;
+    email: string;
+    password: string;
+    department?: string;
+    enrollmentNo?: string;
+    semester?: number;
+    phone?: string;
+  }) => {
+    return provisionUser({
+      ...studentData,
+      role: 'student',
+    });
   };
 
   const approveUser = (userId: string) => {
@@ -314,6 +430,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         approveUser,
         rejectUser,
         updateProfile,
+        createStudentAccount,
+        provisionUser,
         auditLogs,
         addAuditLog,
       }}
