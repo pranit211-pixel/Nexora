@@ -1,0 +1,6 @@
+{
+  "name": "NEXORA – Smart College & Campus Portal",
+  "description": "Next-generation smart college and education management portal with student, faculty, and administrator portals, live academic tracking, and interactive campus facilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
