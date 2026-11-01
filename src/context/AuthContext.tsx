@@ -93,12 +93,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password?.trim() || '';
 
-    // 1. ADMIN LOGIN - Only ajayshewale211@gmail.com with password ajay123
-    if (cleanEmail === 'ajayshewale211@gmail.com' || intendedRole === 'admin') {
-      if (cleanEmail !== 'ajayshewale211@gmail.com' || cleanPassword !== 'ajay123') {
+    // 1. ADMIN LOGIN - Log in with 'admin' or 'ajayshewale211@gmail.com' with password 'ajay123'
+    if (cleanEmail === 'admin' || cleanEmail === 'ajayshewale211@gmail.com' || intendedRole === 'admin') {
+      const isValidAdminIdentifier = cleanEmail === 'admin' || cleanEmail === 'ajayshewale211@gmail.com';
+      if (!isValidAdminIdentifier || cleanPassword !== 'ajay123') {
         return {
           success: false,
-          error: 'Invalid Administrator credentials. Only authorized admin (ajayshewale211@gmail.com) can log in.',
+          error: 'Invalid Administrator credentials. Only authorized Admin can log in.',
         };
       }
 
@@ -126,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!profileData.is_approved) {
               return {
                 success: false,
-                error: 'Your registration request is pending Administrator approval. Please wait for admin (ajayshewale211@gmail.com) to approve your account.',
+                error: 'Your registration request is pending Administrator approval. Please wait for the Admin to approve your account.',
               };
             }
 
@@ -179,14 +180,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!foundUser.isApproved || foundUser.status === 'Pending Approval') {
       return {
         success: false,
-        error: 'Your registration is pending Administrator approval. Admin (ajayshewale211@gmail.com) must review and approve your account before you can log in.',
+        error: 'Your registration is pending Administrator approval. The Admin must review and approve your account before you can log in.',
       };
     }
 
     if (foundUser.status === 'Suspended') {
       return {
         success: false,
-        error: 'Your account has been suspended by the Administrator (ajayshewale211@gmail.com).',
+        error: 'Your account has been suspended by the Administrator.',
       };
     }
 
@@ -271,12 +272,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'REGISTRATION_REQUEST',
       'Profile',
       newUser.id,
-      `New ${newUser.role} registration request from ${newUser.fullName} (${cleanEmail}) queued for Administrator (ajayshewale211@gmail.com) approval.`
+      `New ${newUser.role} registration request from ${newUser.fullName} (${cleanEmail}) queued for Administrator approval.`
     );
 
     return {
       success: true,
-      message: `Registration request for ${newUser.fullName} submitted. Administrator Ajay Shewale (ajayshewale211@gmail.com) must approve your account before you can log in.`,
+      message: `Registration request for ${newUser.fullName} submitted. The Admin must approve your account before you can log in.`,
     };
   };
 

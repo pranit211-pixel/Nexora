@@ -51,7 +51,7 @@ export const DepartmentsSection: React.FC<DepartmentsSectionProps> = ({ departme
             <Building2 className="w-10 h-10 text-[#0284C7] dark:text-[#36D9FF] mx-auto mb-3 opacity-70" />
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Academic Departments Being Structured</h3>
             <p className="text-xs text-slate-600 dark:text-[#9BA6BC] mt-1.5 leading-relaxed">
-              All departments have been cleared per administrator configuration. Academic schools and intake quotas are configurable through the Administrator Portal by Ajay Shewale (<span className="font-mono text-[#0284C7] dark:text-[#36D9FF]">ajayshewale211@gmail.com</span>).
+              All departments have been cleared. New academic departments can only be added directly by the Admin via the Administrator Portal.
             </p>
           </div>
         ) : (

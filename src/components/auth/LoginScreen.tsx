@@ -15,8 +15,9 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { UserRole } from '../../types';
+import { UserRole, Department } from '../../types';
 import { ThemeToggle } from '../common/ThemeToggle';
+import { getStoredData } from '../../integrations/supabase/mockDb';
 
 interface LoginScreenProps {
   onBrowsePublicSite: () => void;
@@ -27,6 +28,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [selectedRole, setSelectedRole] = useState<UserRole>('student');
 
+  // Available departments (strictly created by Admin)
+  const availableDepts = getStoredData<Department[]>('admin_departments', []);
+
   // Login credentials
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +40,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [enrollmentNo, setEnrollmentNo] = useState('');
-  const [department, setDepartment] = useState('Artificial Intelligence & Data Science');
+  const [department, setDepartment] = useState(() => availableDepts[0]?.name || '');
   const [semester, setSemester] = useState('1');
 
   // Status
@@ -48,7 +52,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
     e.preventDefault();
     setError(null);
     if (!email || !password) {
-      setError('Please provide your institutional email and password.');
+      setError('Please provide your institutional email/ID and password.');
       return;
     }
 
@@ -81,7 +85,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
         email,
         phone,
         role: 'faculty',
-        department,
+        department: department || 'General Academic',
       }, password);
 
       if (res.success) {
@@ -94,18 +98,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
     } finally {
       setLoading(false);
     }
-  };
-
-  const fillCredentials = (roleToFill: UserRole) => {
-    setSelectedRole(roleToFill);
-    if (roleToFill === 'admin') {
-      setEmail('ajayshewale211@gmail.com');
-      setPassword('ajay123');
-    } else {
-      setEmail('');
-      setPassword('');
-    }
-    setError(null);
   };
 
   return (
@@ -141,7 +133,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
                 type="button"
                 onClick={() => {
                   setSelectedRole('student');
-                  fillCredentials('student');
+                  setError(null);
                 }}
                 className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                   selectedRole === 'student'
@@ -156,7 +148,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
                 type="button"
                 onClick={() => {
                   setSelectedRole('faculty');
-                  fillCredentials('faculty');
+                  setError(null);
                 }}
                 className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                   selectedRole === 'faculty'
@@ -171,7 +163,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
                 type="button"
                 onClick={() => {
                   setSelectedRole('admin');
-                  fillCredentials('admin');
+                  setError(null);
                 }}
                 className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                   selectedRole === 'admin'
@@ -219,37 +211,31 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
           {mode === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               {selectedRole === 'admin' ? (
-                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-300 flex items-center justify-between mb-2">
-                  <span>Primary Admin: <strong>ajayshewale211@gmail.com</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => fillCredentials('admin')}
-                    className="text-[10px] font-bold text-[#080B14] bg-emerald-400 hover:bg-emerald-300 px-2 py-0.5 rounded transition-colors"
-                  >
-                    Auto-fill
-                  </button>
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-300 flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 shrink-0 text-emerald-500" />
+                  <span><strong>Admin Portal</strong> · Enter authorized institutional credentials to sign in.</span>
                 </div>
               ) : (
                 <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-[11px] text-sky-700 dark:text-sky-300 mb-2 leading-relaxed">
-                  Student/Faculty accounts require approval. Once you register, Administrator Ajay Shewale (<span className="font-mono">ajayshewale211@gmail.com</span>) must approve your account before login.
+                  Student/Faculty accounts require approval. Once you register, the <strong>Admin</strong> must approve your account before login.
                 </div>
               )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Institutional Email
+                  {selectedRole === 'admin' ? 'Admin ID or Email' : 'Institutional Email'}
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 dark:text-[#9BA6BC] absolute left-3.5 top-3" />
                   <input
-                    type="email"
+                    type="text"
                     required
                     placeholder={
                       selectedRole === 'student'
-                        ? 'student.applicant@domain.com'
+                        ? 'student@nexora.edu'
                         : selectedRole === 'faculty'
-                        ? 'faculty.applicant@domain.com'
-                        : 'ajayshewale211@gmail.com'
+                        ? 'faculty@nexora.edu'
+                        : 'Admin ID or Email'
                     }
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -353,16 +339,36 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Department Name
+                  Department
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Computer Science / AI / Electronics"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-[#36D9FF]"
-                />
+                {availableDepts.length > 0 ? (
+                  <select
+                    required
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-[#36D9FF]"
+                  >
+                    <option value="">Select an Academic Department</option>
+                    {availableDepts.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name} ({d.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="General / Pending Admin Department Charter"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-[#36D9FF]"
+                  />
+                )}
+                {availableDepts.length === 0 && (
+                  <p className="text-[10px] text-slate-500 dark:text-[#9BA6BC] mt-1">
+                    No departments added yet. Only the Admin can add new departments from the Administrator Portal.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -378,7 +384,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBrowsePublicSite }) 
               </div>
 
               <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                Notice: Account will be reviewed by Administrator Ajay Shewale (ajayshewale211@gmail.com). You will be granted access once approved.
+                Notice: Account will be reviewed by the Admin. You will be granted access once approved.
               </div>
 
               <button

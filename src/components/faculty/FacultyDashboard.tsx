@@ -152,8 +152,8 @@ export const FacultyDashboard: React.FC = () => {
         email: newStuEmail.trim(),
         password: newStuPassword.trim(),
         enrollmentNo: generatedEnrollment,
-        department: user?.department || 'Artificial Intelligence & Data Science',
-        semester: parseInt(newStuSemester, 10) || 5,
+        department: user?.department || 'General Academic',
+        semester: parseInt(newStuSemester, 10) || 1,
       });
 
       if (res.success && res.user) {
@@ -358,7 +358,7 @@ export const FacultyDashboard: React.FC = () => {
                 {user?.fullName || 'Dr. Marcus Sterling, Ph.D.'}
               </h1>
               <p className="text-xs text-slate-600 dark:text-[#9BA6BC] mt-0.5">
-                Department of {user?.department || 'Artificial Intelligence & Data Science'}
+                {user?.department ? `Department of ${user.department}` : 'Academic Faculty Portal'}
               </p>
             </div>
           </div>

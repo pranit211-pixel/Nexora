@@ -279,7 +279,7 @@ export const INITIAL_FACILITIES: CampusFacility[] = [
 ];
 
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [
-  { id: 'aud_1', userEmail: 'ajayshewale211@gmail.com', action: 'INIT_SYSTEM', entityType: 'System', entityId: 'NEXORA', details: 'Institutional security ledger initialized with sole root admin Ajay Shewale.', timestamp: '2026-10-31 00:00:00' },
+  { id: 'aud_1', userEmail: 'Admin', action: 'INIT_SYSTEM', entityType: 'System', entityId: 'NEXORA', details: 'Institutional security ledger initialized with root Admin.', timestamp: '2026-10-31 00:00:00' },
 ];
 
 // LocalStorage persistence helpers so user edits persist across refreshes!
@@ -318,8 +318,8 @@ export function clearAllStoredData(): void {
   keysToRemove.forEach((k) => localStorage.removeItem(k));
 }
 
-// Enforce single admin (ajayshewale211@gmail.com), 0 default students, and manual attendance on boot
-const DB_VERSION_TAG = 'nexora_v8_strict_faculty_student_provisioning';
+// Enforce single admin, 0 default departments, 0 default students, and manual attendance on boot
+const DB_VERSION_TAG = 'nexora_v9_no_departments_no_autofill';
 if (typeof window !== 'undefined') {
   try {
     const currentVersion = localStorage.getItem('nexora_version_tag');

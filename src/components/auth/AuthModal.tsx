@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, User, Shield, GraduationCap, Briefcase, Phone, BookOpen, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { UserRole } from '../../types';
+import { UserRole, Department } from '../../types';
+import { getStoredData } from '../../integrations/supabase/mockDb';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -14,13 +15,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [selectedRole, setSelectedRole] = useState<UserRole>('student');
 
+  const availableDepts = getStoredData<Department[]>('admin_departments', []);
+
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [enrollmentNo, setEnrollmentNo] = useState('');
-  const [department, setDepartment] = useState('Artificial Intelligence & Data Science');
+  const [department, setDepartment] = useState(() => availableDepts[0]?.name || '');
   const [semester, setSemester] = useState('5');
   const [academicYear, setAcademicYear] = useState('2026-2027');
 
@@ -91,14 +94,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     }
   };
 
-  const handleQuickDemo = (role: UserRole) => {
-    setSelectedRole(role);
-    if (role === 'admin') {
-      setEmail('ajayshewale211@gmail.com');
-      setPassword('ajay123');
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-md bg-[#101629] border border-[#36D9FF]/20 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
@@ -116,34 +111,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           >
             <X className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* 1-Click Demo Evaluation Bar */}
-        <div className="px-6 py-3 bg-[#080B14] border-b border-slate-800">
-          <span className="text-[11px] font-mono text-[#9BA6BC] block mb-2">Instant 1-Click Demo Sign-In:</span>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleQuickDemo('student')}
-              className="py-1.5 px-2 bg-slate-800 hover:bg-[#36D9FF]/20 hover:text-[#36D9FF] hover:border-[#36D9FF]/30 border border-transparent rounded-lg text-xs font-medium text-slate-300 transition-all text-center flex items-center justify-center gap-1"
-            >
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Student</span>
-            </button>
-            <button
-              onClick={() => handleQuickDemo('faculty')}
-              className="py-1.5 px-2 bg-slate-800 hover:bg-[#B46AFF]/20 hover:text-[#B46AFF] hover:border-[#B46AFF]/30 border border-transparent rounded-lg text-xs font-medium text-slate-300 transition-all text-center flex items-center justify-center gap-1"
-            >
-              <Briefcase className="w-3.5 h-3.5" />
-              <span>Faculty</span>
-            </button>
-            <button
-              onClick={() => handleQuickDemo('admin')}
-              className="py-1.5 px-2 bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30 border border-transparent rounded-lg text-xs font-medium text-slate-300 transition-all text-center flex items-center justify-center gap-1"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Admin</span>
-            </button>
-          </div>
         </div>
 
         {/* Form Body */}
@@ -217,14 +184,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                 <div className="relative">
                   <Mail className="w-4 h-4 text-[#9BA6BC] absolute left-3 top-2.5" />
                   <input
-                    type="email"
+                    type="text"
                     required
                     placeholder={
                       selectedRole === 'admin'
-                        ? 'admin.provost@nexora.edu'
+                        ? 'Admin ID or Email'
                         : selectedRole === 'faculty'
-                        ? 'dr.marcus@nexora.edu'
-                        : 'alex.chen@nexora.edu'
+                        ? 'faculty@nexora.edu'
+                        : 'student@nexora.edu'
                     }
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -325,17 +292,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Academic Department</label>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#080B14] border border-slate-800 rounded-lg text-white focus:outline-none focus:border-[#36D9FF]"
-                >
-                  <option value="Artificial Intelligence & Data Science">AI &amp; Data Science</option>
-                  <option value="Computer Science & Engineering">Computer Science &amp; Engineering</option>
-                  <option value="Electronics & Telecommunication">Electronics &amp; Telecommunication</option>
-                  <option value="Mechanical & Robotics Engineering">Mechanical &amp; Robotics</option>
-                  <option value="Civil & Smart Infrastructure">Civil &amp; Smart Infrastructure</option>
-                </select>
+                {availableDepts.length > 0 ? (
+                  <select
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#080B14] border border-slate-800 rounded-lg text-white focus:outline-none focus:border-[#36D9FF]"
+                  >
+                    <option value="">Select Department</option>
+                    {availableDepts.map((d) => (
+                      <option key={d.id} value={d.name}>{d.name} ({d.code})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="General / Pending Admin Department Charter"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#080B14] border border-slate-800 rounded-lg text-white focus:outline-none focus:border-[#36D9FF]"
+                  />
+                )}
               </div>
 
               {selectedRole === 'student' && (

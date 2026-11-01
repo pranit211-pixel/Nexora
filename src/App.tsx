@@ -40,9 +40,21 @@ function MainApp() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   // Stored state for public & shared feeds
-  const [departments] = useState<Department[]>(() =>
+  const [departments, setDepartments] = useState<Department[]>(() =>
     getStoredData('admin_departments', INITIAL_DEPARTMENTS)
   );
+
+  React.useEffect(() => {
+    const syncDepts = () => {
+      setDepartments(getStoredData('admin_departments', INITIAL_DEPARTMENTS));
+    };
+    window.addEventListener('storage', syncDepts);
+    window.addEventListener('nexora_departments_updated', syncDepts);
+    return () => {
+      window.removeEventListener('storage', syncDepts);
+      window.removeEventListener('nexora_departments_updated', syncDepts);
+    };
+  }, []);
   const [facilities] = useState<CampusFacility[]>(() =>
     getStoredData('facilities', INITIAL_FACILITIES)
   );

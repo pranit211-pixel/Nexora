@@ -198,7 +198,7 @@ export const StudentDashboard: React.FC = () => {
                 Welcome back, {user?.fullName || 'Enrolled Scholar'}
               </h1>
               <p className="text-xs text-slate-600 dark:text-[#9BA6BC] mt-0.5">
-                Department of {user?.department || 'Autonomous Engineering'}
+                {user?.department ? `Department of ${user.department}` : 'Enrolled Academic Scholar'}
               </p>
             </div>
           </div>

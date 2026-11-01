@@ -63,8 +63,8 @@ interface ManagedUser {
 const INITIAL_MANAGED_USERS: ManagedUser[] = [
   {
     id: 'usr_admin_ajay',
-    fullName: 'Ajay Shewale',
-    email: 'ajayshewale211@gmail.com',
+    fullName: 'Admin',
+    email: 'admin@nexora.edu',
     role: 'admin' as any,
     department: 'Administration',
     status: 'Active',
@@ -81,7 +81,7 @@ export const AdminDashboard: React.FC = () => {
   );
   const [userSearch, setUserSearch] = useState('');
 
-  // Department management (initially empty per user request)
+  // Department management (strictly managed by Admin)
   const [departments, setDepartments] = useState<Department[]>(() =>
     getStoredData('admin_departments', INITIAL_DEPARTMENTS)
   );
@@ -103,7 +103,7 @@ export const AdminDashboard: React.FC = () => {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserEnrollment, setNewUserEnrollment] = useState('');
   const [newUserRole, setNewUserRole] = useState<'student' | 'faculty'>('student');
-  const [newUserDept, setNewUserDept] = useState('Computer Science');
+  const [newUserDept, setNewUserDept] = useState(() => departments[0]?.name || '');
 
   const [showCreateNoticeModal, setShowCreateNoticeModal] = useState(false);
   const [newNoticeTitle, setNewNoticeTitle] = useState('');
@@ -253,12 +253,26 @@ export const AdminDashboard: React.FC = () => {
     const updated = [...departments, newDept];
     setDepartments(updated);
     setStoredData('admin_departments', updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nexora_departments_updated'));
+    }
     addAuditLog('CREATE_DEPARTMENT', 'Department', newDept.id, `Created school of ${newDept.name} (${newDept.code})`);
 
     setShowAddDeptModal(false);
     setNewDeptCode('');
     setNewDeptName('');
     setNewDeptHod('');
+  };
+
+  const handleDeleteDepartment = (id: string) => {
+    const target = departments.find((d) => d.id === id);
+    const updated = departments.filter((d) => d.id !== id);
+    setDepartments(updated);
+    setStoredData('admin_departments', updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nexora_departments_updated'));
+    }
+    addAuditLog('DELETE_DEPARTMENT', 'Department', id, `Removed department: ${target?.name || id}`);
   };
 
   const exportCSV = (type: string) => {
@@ -313,10 +327,10 @@ export const AdminDashboard: React.FC = () => {
                 <span>Super Administrator</span>
               </div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-                {user?.fullName || 'Ajay Shewale'}
+                {user?.fullName || 'Admin'}
               </h1>
               <p className="text-xs text-slate-600 dark:text-[#9BA6BC] mt-0.5">
-                Central Academic Senate &amp; Institutional Governance · {user?.email || 'ajayshewale211@gmail.com'}
+                Central Academic Senate &amp; Institutional Governance · Admin Portal
               </p>
             </div>
           </div>
@@ -593,23 +607,34 @@ export const AdminDashboard: React.FC = () => {
                 <Building2 className="w-10 h-10 text-[#0284C7] dark:text-[#36D9FF] mx-auto mb-2 opacity-60" />
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">All Departments Removed</h4>
                 <p className="text-xs text-slate-500 dark:text-[#9BA6BC] mt-1 max-w-md mx-auto">
-                  All departments have been cleared. As Administrator Ajay Shewale, you can charter new academic departments anytime by clicking below.
+                  All departments have been cleared. As the Admin, only you can add new academic departments anytime by clicking below.
                 </p>
                 <button
+                  type="button"
                   onClick={() => setShowAddDeptModal(true)}
                   className="mt-4 px-4 py-2 text-xs font-bold text-[#080B14] bg-[#36D9FF] hover:bg-[#36D9FF]/90 rounded-lg inline-flex items-center gap-1.5 shadow-[0_0_15px_-3px_rgba(54,217,255,0.4)]"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Charter New Department</span>
+                  <span>Add New Department</span>
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {departments.map((dept) => (
-                  <div key={dept.id} className="p-5 rounded-xl bg-white dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
+                  <div key={dept.id} className="p-5 rounded-xl bg-white dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none relative group">
                     <div className="flex items-center justify-between text-xs mb-2">
                       <span className="font-mono text-[#0284C7] dark:text-[#36D9FF] font-semibold">{dept.code}</span>
-                      <span className="font-mono text-slate-500 dark:text-slate-400">Intake: {dept.totalIntake} Scholars</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-slate-500 dark:text-slate-400">Intake: {dept.totalIntake} Scholars</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDepartment(dept.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded transition-colors"
+                          title="Delete Department"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <h4 className="text-base font-bold text-slate-900 dark:text-white">{dept.name}</h4>
                     <p className="text-xs text-slate-600 dark:text-[#9BA6BC] mt-1">{dept.description}</p>
@@ -946,15 +971,25 @@ CASCADE;`);
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Department</label>
-                  <select
-                    value={newUserDept}
-                    onChange={(e) => setNewUserDept(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white"
-                  >
-                    <option value="Artificial Intelligence & Data Science">AI &amp; Data Science</option>
-                    <option value="Computer Science & Engineering">Computer Science</option>
-                    <option value="Electronics & Telecommunication">Electronics</option>
-                  </select>
+                  {departments.length > 0 ? (
+                    <select
+                      value={newUserDept}
+                      onChange={(e) => setNewUserDept(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white"
+                    >
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.name}>{d.name} ({d.code})</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. General Academic"
+                      value={newUserDept}
+                      onChange={(e) => setNewUserDept(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-[#080B14] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#36D9FF]"
+                    />
+                  )}
                 </div>
               </div>
 
